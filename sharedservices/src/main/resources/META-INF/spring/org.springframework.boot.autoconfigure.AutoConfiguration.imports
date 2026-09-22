@@ -1,2 +1,3 @@
 com.example.sharedservices.jndi.EmbeddedTomcatJndiAutoConfiguration
 com.example.sharedservices.cxf.CxfAuditInterceptorAutoConfiguration
+com.example.sharedservices.database.MainDatabaseAutoConfiguration

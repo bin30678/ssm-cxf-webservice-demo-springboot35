@@ -15,3 +15,31 @@ CREATE TABLE IF NOT EXISTS connection_probe (
 
 DELETE FROM connection_probe;
 INSERT INTO connection_probe (source_name) VALUES ('cxfdemo1');
+
+CREATE TABLE IF NOT EXISTS policy_info (
+    policy_no VARCHAR(50) PRIMARY KEY,
+    holder_name VARCHAR(100),
+    product_name VARCHAR(100),
+    status VARCHAR(20)
+);
+
+CREATE TABLE IF NOT EXISTS audit_request (
+    guid VARCHAR(50) PRIMARY KEY,
+    client_ip VARCHAR(50),
+    client_type VARCHAR(50),
+    hostname VARCHAR(100),
+    request_uri VARCHAR(255),
+    request_method VARCHAR(10),
+    payload CLOB
+);
+
+CREATE TABLE IF NOT EXISTS audit_response (
+    guid VARCHAR(50) PRIMARY KEY,
+    response_code INTEGER,
+    payload CLOB
+);
+
+CREATE TABLE IF NOT EXISTS audit_fault (
+    guid VARCHAR(50) PRIMARY KEY,
+    error_msg CLOB
+);

@@ -36,3 +36,28 @@ Run with the Jabba-managed JDK 21:
 jabba use temurin@21
 mvn clean test
 ```
+
+## MySQL DAO proof
+
+Run `app-a/src/main/resources/db/mysql-migration-support.sql` once against the
+existing SSM MySQL fixture, then start app-a with the `mysql` profile. The REST
+endpoint below inserts a policy through the main project's original
+`PolicyDaoImpl` and inserts a customer through external-lib-a's
+`ExternalJarGenericDao`:
+
+```text
+POST http://localhost:18080/rest/mainNouternal/dao
+Content-Type: application/json
+
+{
+  "policyNo": "SB35-001",
+  "holderName": "Spring Boot 3.5 Migration",
+  "productName": "CXF 4.1.4",
+  "status": "ACTIVE",
+  "customerName": "Boot35 Customer 001"
+}
+```
+
+The main row is stored in `cxfdemo1.policy_info`; the external JAR row is stored
+in `cxfdemo2.customers`. The CXF audit interceptors write request and response
+rows through `AuditLogDao` and `mapper/AuditLog.xml`.
