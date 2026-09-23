@@ -334,3 +334,20 @@ java -version
 - 舊 `ContextLoaderListener` 不搬；Spring Boot 自己管理 ApplicationContext 生命週期。
 - `DatabaseSystemPropertiesStartupTest` 驗證兩個 listener 寫入的 TIFF、字型 attribute，以及 `targetFont=標楷體`。
 - Spring Boot 官方依據：<https://docs.spring.io/spring-boot/reference/web/servlet.html#web.servlet.embedded-container.servlets-filters-listeners>
+
+## 16. 定時任務搬到 app-b
+
+- Listener 整合已先獨立提交：`ff73042 Move servlet environment listeners to sharedservices`。
+- 原 SSM 的 `ScheduledTasks` 原樣搬到 app-b，package 仍為 `com.example.cxfdemo.scheduler`。
+- 四個 cron 保持不變：每小時 `0 0 * * * *`、午夜 `0 0 0 * * *`、凌晨一點 `0 0 1 * * *`、正午 `0 0 12 * * *`。
+- 凌晨一點仍呼叫 `cleanOldBackupFiles("C:/backup_folder", 7)`；檔案清理邏輯未重寫。
+- 原 `QuartzDemoJob` 原樣搬到 app-b。以 Boot `spring-boot-starter-quartz` 自動建立 Scheduler，JobDetail 保持 durable；Trigger 啟動延遲 1 秒、每 300000ms 重複，使用預設 RAMJobStore。
+- `AppBSchedulingConfiguration` 使用 `@EnableScheduling` 取代舊 XML `<task:annotation-driven/>`，並建立 Boot 會自動收集的 Quartz `JobDetail`、`Trigger` beans。
+- app-b 設定為 `spring.main.web-application-type=none`，排程不啟動 Web/CXF，也不經 CXF interceptor。
+- 舊 `TaskController` 與 `PolicyResourceImpl.testCleanBackup` 是手動 HTTP 入口，未搬入非 Web 的 app-b；底層 `cleanOldBackupFiles` 保留。
+- `TransferTaskDao` 屬於 async transfer 流程，沒有被任何排程類別引用，本次不搬。
+- `AppBSchedulingIntegrationTest` 驗證 app-b 註冊 4 個 Spring cron、Quartz durable JobDetail、關聯 Trigger 與 300000ms interval。
+- `ScheduledTasksTest` 使用 JUnit temp directory 驗證遞迴刪除超過 7 天的檔案、保留新檔並刪除空子目錄。
+- Java 21 執行 `mvn -pl app-b -am test`：app-b 2 tests、0 failures、0 errors，reactor 四個模組 SUCCESS。
+- Java 21 完整執行 `mvn test`：七個 reactor 模組全部 SUCCESS；app-a 5 tests、app-b 2 tests，合計 7 tests、0 failures、0 errors。
+- 官方依據：Spring `@EnableScheduling` 等價取代 XML annotation-driven：<https://docs.spring.io/spring-framework/reference/integration/scheduling.html>；Boot 自動收集 Quartz JobDetail/Trigger：<https://docs.spring.io/spring-boot/3.5/reference/io/quartz.html>。

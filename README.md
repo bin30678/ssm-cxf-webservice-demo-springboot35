@@ -97,8 +97,8 @@ To use the same main database, configure each app's `jdbc/cxfdemo1` resource wit
 the same main database host/database, and keep early system-properties JDBC
 settings aligned with it. A JNDI name alone does not guarantee the same physical
 database. Do not override the reserved `*1` beans with secondary database beans.
-`app-b`–`app-d` still need their deployment datasource/JNDI settings when their
-business functions are migrated; their current skeletons are not a completed
+`app-b` needs deployment datasource/JNDI settings if later jobs use the main
+database. `app-c` and `app-d` remain skeletons. This is not yet a completed
 multi-service database deployment.
 
 Verification includes HTTP discovery of a test-only resource without explicit
@@ -106,3 +106,18 @@ registration, actual app-a JNDI datasource identity, and two independent Spring
 contexts reading the main database through all three BaseDao access paths while
 secondary beans are marked `@Primary`. A missing-main-bean test checks fail-fast
 behavior. These are H2 checks, not a new multi-process MySQL deployment test.
+
+## app-b scheduler service
+
+`app-b` is a non-web Spring Boot process dedicated to the legacy scheduled jobs.
+It enables Spring `@Scheduled` processing for the four original cron methods and
+uses Boot's Quartz auto-configuration for the original `QuartzDemoJob`. The
+Quartz trigger retains the one-second startup delay and five-minute repeat
+interval, using the default in-memory job store. Because app-b has no servlet
+server or CXF endpoint, scheduled invocations do not pass through the shared CXF
+audit interceptors.
+
+The legacy manual MVC/CXF endpoints that invoked backup cleanup are not part of
+the scheduler service migration. The underlying `cleanOldBackupFiles` method is
+still available in `ScheduledTasks`. `TransferTaskDao` belongs to the separate
+asynchronous transfer workflow and is not part of these scheduled jobs.
