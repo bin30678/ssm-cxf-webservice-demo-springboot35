@@ -2,6 +2,7 @@ package com.example.cxfdemo.dao;
 
 import org.mybatis.spring.SqlSessionTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import javax.sql.DataSource;
@@ -14,12 +15,15 @@ import javax.sql.DataSource;
 public abstract class BaseDao {
 
     @Autowired
+    @Qualifier("sqlSessionTemplate1")
     protected SqlSessionTemplate sqlSessionTemplate;
 
     @Autowired
+    @Qualifier("jdbcTemplate1")
     protected JdbcTemplate jdbcTemplate;
 
     @Autowired
+    @Qualifier("dataSource1")
     protected DataSource dataSource;
 
     public BaseDao() {

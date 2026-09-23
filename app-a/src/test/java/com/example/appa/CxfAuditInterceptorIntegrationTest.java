@@ -25,7 +25,7 @@ import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.context.WebServerApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.test.context.TestConfiguration;
 
 class CxfAuditInterceptorIntegrationTest {
 
@@ -120,7 +120,7 @@ class CxfAuditInterceptorIntegrationTest {
         assertThat(response.headers().firstValue("Pragma")).contains("no-cache");
     }
 
-    @Configuration(proxyBeanMethods = false)
+    @TestConfiguration(proxyBeanMethods = false)
     static class AuditProbeConfiguration {
 
         @Bean("sqlSessionTemplate1")

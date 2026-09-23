@@ -13,11 +13,11 @@ ssm-cxf-webservice-demo-springboot35
 ```
 
 `sharedservices` registers a Spring Boot `EnvironmentPostProcessor`. During standalone Boot
-startup it uses the normal `spring.datasource.*` connection settings, queries `system_properties`,
-and adds all `prop_key` / `prop_value` rows as a high-priority Spring property source. This happens
-before beans are created, so both placeholders in `application.properties` and `@Value` can use
-the values. An existing application-server JNDI DataSource remains available as an explicit
-option through `spring.datasource.jndi-name`.
+startup it uses the `sharedservices.jndi.datasources.cxfdemo1.*` definition, queries
+`system_properties`, and adds all `prop_key` / `prop_value` rows as a high-priority Spring property
+source. This is the same definition later registered as JNDI `jdbc/cxfdemo1`; there is no separate
+`spring.datasource.*` configuration. An application server that has already created JNDI before
+Spring starts can be selected explicitly with `sharedservices.system-properties.jndi-name`.
 
 `app-a` is directly runnable with an H2 demonstration database. Its integration test starts the
 real Boot application without creating a fake JNDI context, verifies both placeholder mechanisms,
@@ -61,3 +61,48 @@ Content-Type: application/json
 The main row is stored in `cxfdemo1.policy_info`; the external JAR row is stored
 in `cxfdemo2.customers`. The CXF audit interceptors write request and response
 rows through `AuditLogDao` and `mapper/AuditLog.xml`.
+
+## REST discovery
+
+`AppACxfConfiguration` scans `com.example.cxfdemo.rest` and
+`com.example.cxfdemo.provider`, including classes annotated with JAX-RS `@Path`
+or `@Provider`. Spring creates these beans and injects their dependencies;
+`cxf.jaxrs.component-scan=true` publishes them with `cxf.jaxrs.server.path=/`.
+Adding a resource in these packages requires no new `@Bean` method and no entry
+in `setServiceBeans`. If a service uses different packages, adjust its scan roots.
+The single servlet registration preserves `/rest/*` and `/Webservice/*`; it is
+application infrastructure, not a registration per resource. This discovery is
+for JAX-RS REST resources/providers; SOAP endpoint publication is separate.
+
+## Main database contract for every BaseDao consumer
+
+`sharedservices` is a shared JAR, not a separately deployed database service.
+Any Spring-managed DAO in an application depending on it can extend
+`com.example.cxfdemo.dao.BaseDao`. The inherited fields explicitly select:
+
+| BaseDao field | Required bean | Database path |
+| --- | --- | --- |
+| `sqlSessionTemplate` | `sqlSessionTemplate1` | `sqlSessionFactory1` → `dataSource1` |
+| `jdbcTemplate` | `jdbcTemplate1` | `dataSource1` |
+| `dataSource` | `dataSource1` | `java:comp/env/jdbc/cxfdemo1` |
+
+These qualifiers apply to subclasses in any consumer module. They prevent a
+second datasource/template (even one marked `@Primary`) from silently replacing
+the main dependency. Missing required beans fail startup rather than falling
+back. Existing setters remain for legacy compatibility; callers must not use
+them to replace the main dependencies with another database.
+
+Each deployed app has its own Spring context, JNDI context, and connection pool.
+To use the same main database, configure each app's `jdbc/cxfdemo1` resource with
+the same main database host/database, and keep early system-properties JDBC
+settings aligned with it. A JNDI name alone does not guarantee the same physical
+database. Do not override the reserved `*1` beans with secondary database beans.
+`app-b`–`app-d` still need their deployment datasource/JNDI settings when their
+business functions are migrated; their current skeletons are not a completed
+multi-service database deployment.
+
+Verification includes HTTP discovery of a test-only resource without explicit
+registration, actual app-a JNDI datasource identity, and two independent Spring
+contexts reading the main database through all three BaseDao access paths while
+secondary beans are marked `@Primary`. A missing-main-bean test checks fail-fast
+behavior. These are H2 checks, not a new multi-process MySQL deployment test.

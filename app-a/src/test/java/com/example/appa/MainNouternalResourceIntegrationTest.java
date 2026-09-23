@@ -3,6 +3,10 @@ package com.example.appa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.cxfdemo.utils.GenericDao;
+import com.example.cxfdemo.dao.PolicyDaoImpl;
+import com.example.cxfdemo.provider.GsonProvider;
+import com.example.cxfdemo.rest.HealthResource;
+import javax.sql.DataSource;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,6 +28,23 @@ class MainNouternalResourceIntegrationTest {
                 .web(WebApplicationType.SERVLET)
                 .run("--spring.main.banner-mode=off")) {
             int port = ((WebServerApplicationContext) context).getWebServer().getPort();
+            assertThat(context.getBeansOfType(HealthResource.class)).hasSize(1);
+            assertThat(context.getBeansOfType(GsonProvider.class)).hasSize(1);
+            PolicyDaoImpl policyDao = context.getBean(PolicyDaoImpl.class);
+            DataSource mainDataSource = context.getBean("dataSource1", DataSource.class);
+            assertThat(policyDao.getDataSource()).isSameAs(mainDataSource);
+            assertThat(policyDao.getJdbcTemplate().getDataSource()).isSameAs(mainDataSource);
+            assertThat(policyDao.getSqlSessionTemplate().getSqlSessionFactory()
+                    .getConfiguration().getEnvironment().getDataSource()).isSameAs(mainDataSource);
+            try (Connection connection = policyDao.getDataSource().getConnection()) {
+                assertThat(connection.getMetaData().getURL()).isEqualTo("jdbc:h2:mem:cxfdemo1");
+            }
+            HttpResponse<String> scanResponse = HttpClient.newHttpClient().send(
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/rest/scan-proof"))
+                            .GET().build(), HttpResponse.BodyHandlers.ofString());
+            assertThat(scanResponse.statusCode()).isEqualTo(200);
+            assertThat(scanResponse.body()).contains("DB_STARTUP_PROPERTY_LOADED");
+
             String suffix = Long.toString(System.nanoTime());
             String policyNo = "TEST-" + suffix;
             String customerName = "External-" + suffix;

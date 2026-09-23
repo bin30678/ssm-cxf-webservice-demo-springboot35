@@ -56,17 +56,32 @@ public class EmbeddedTomcatJndiAutoConfiguration {
         private final EmbeddedJndiProperties properties;
         private final ClassLoader applicationClassLoader;
 
+        /**
+         * 保存 application.properties 綁定完成的全部 JNDI DataSource 設定，並記住啟動
+         * Spring Boot 應用程式的 ClassLoader。後續要把這個 ClassLoader 綁到 Tomcat
+         * Naming Context，讓主程式及外部 JAR 都能透過 InitialContext 查到同一批資源。
+         */
         private JndiTomcatServletWebServerFactory(EmbeddedJndiProperties properties) {
             this.properties = properties;
             this.applicationClassLoader = Thread.currentThread().getContextClassLoader();
         }
 
+        /**
+         * 在 Spring Boot 建立 TomcatWebServer 前啟用 Tomcat Naming。沒有呼叫
+         * enableNaming()，java:comp/env 下的 JNDI Context 不會建立，後續註冊的
+         * jdbc/cxfdemo1 等 DataSource 也無法被 lookup。
+         */
         @Override
         protected TomcatWebServer getTomcatWebServer(Tomcat tomcat) {
             tomcat.enableNaming();
             return super.getTomcatWebServer(tomcat);
         }
 
+        /**
+         * Tomcat 建立 Web Application Context 時的擴充點。先保留父類別的標準處理，
+         * 再註冊停止時的 ClassLoader 清理動作，最後把 properties.datasources 中的
+         * 每一筆設定轉成 Tomcat ContextResource。
+         */
         @Override
         protected void postProcessContext(Context context) {
             super.postProcessContext(context);
@@ -77,6 +92,10 @@ public class EmbeddedTomcatJndiAutoConfiguration {
             }
         }
 
+        /**
+         * 在 Tomcat Context 停止前解除 application ClassLoader 與 Naming Context 的
+         * 綁定，避免應用程式停止或重新啟動後留下舊的 JNDI Context／ClassLoader 參照。
+         */
         private void registerNamingContextCleanup(Context context) {
             if (!(context instanceof StandardContext standardContext)) {
                 throw new IllegalStateException(
@@ -94,6 +113,11 @@ public class EmbeddedTomcatJndiAutoConfiguration {
             });
         }
 
+        /**
+         * 將啟動 Spring Boot 應用程式的 ClassLoader 綁定到指定的 Tomcat
+         * StandardContext。綁定後，由該 ClassLoader 載入的主程式或外部 JAR 執行
+         * new InitialContext().lookup("java:comp/env/...") 時，才能找到此 Web 應用的資源。
+         */
         private void bindApplicationClassLoader(StandardContext context) {
             try {
                 ContextBindings.bindClassLoader(context, context.getNamingToken(), applicationClassLoader);
@@ -104,6 +128,11 @@ public class EmbeddedTomcatJndiAutoConfiguration {
             }
         }
 
+        /**
+         * 取得目前 Tomcat Host 下的所有 Web Context，逐一呼叫
+         * bindApplicationClassLoader。這個方法在 WebServerInitializedEvent 後執行，
+         * 此時 Tomcat 已完成 Naming Context 的建立。
+         */
         private void bindApplicationClassLoaders(TomcatWebServer tomcatWebServer) {
             for (var child : tomcatWebServer.getTomcat().getHost().findChildren()) {
                 if (child instanceof StandardContext standardContext) {
@@ -112,6 +141,12 @@ public class EmbeddedTomcatJndiAutoConfiguration {
             }
         }
 
+        /**
+         * 將一筆 sharedservices.jndi.datasources.<id> 設定轉成 Tomcat JNDI
+         * ContextResource。id（例如 cxfdemo1）只用來識別設定及產生錯誤訊息；真正
+         * 註冊的 JNDI 名稱取自 settings.jndiName，實際 JDBC 位置取自
+         * settings.jdbcUrl。資源由 HikariJNDIFactory 建立為可共用的單例 DataSource。
+         */
         private void addDataSourceResource(Context context, String id,
                                            EmbeddedJndiProperties.DataSourceResource settings) {
             requireText(settings.getJndiName(), id + ".jndi-name");
@@ -135,12 +170,19 @@ public class EmbeddedTomcatJndiAutoConfiguration {
             context.getNamingResources().addResource(resource);
         }
 
+        /**
+         * 驗證建立 JNDI DataSource 必填的文字設定。property 已包含 Map key 與欄位名，
+         * 例如 cxfdemo1.jndi-name，讓啟動失敗訊息能直接指出缺少哪一項設定。
+         */
         private void requireText(String value, String property) {
             if (value == null || value.isBlank()) {
                 throw new IllegalStateException("sharedservices.jndi.datasources." + property + " is required");
             }
         }
 
+        /**
+         * Tomcat ContextResource 的 property 不接受 null；未設定帳號或密碼時轉成空字串。
+         */
         private String nullToEmpty(String value) {
             return value == null ? "" : value;
         }

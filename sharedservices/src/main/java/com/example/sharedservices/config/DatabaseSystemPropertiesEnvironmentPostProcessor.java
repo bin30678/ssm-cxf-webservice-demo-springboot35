@@ -26,6 +26,8 @@ public final class DatabaseSystemPropertiesEnvironmentPostProcessor
 
     static final String PROPERTY_SOURCE_NAME = "databaseSystemProperties";
     static final String PREFIX = "sharedservices.system-properties.";
+    static final String MAIN_JNDI_DATASOURCE_PREFIX =
+            "sharedservices.jndi.datasources.cxfdemo1.";
     static final String DEFAULT_QUERY = "SELECT prop_key, prop_value FROM system_properties";
 
     @Override
@@ -44,24 +46,32 @@ public final class DatabaseSystemPropertiesEnvironmentPostProcessor
         } catch (Exception ex) {
             if (failFast) {
                 throw new IllegalStateException(
-                        "Failed to load system_properties using the configured Spring Boot DataSource", ex);
+                        "Failed to load system_properties from the main DataSource jdbc/cxfdemo1", ex);
             }
         }
     }
 
     private Map<String, Object> loadProperties(ConfigurableEnvironment environment, String query)
             throws Exception {
-        String jndiName = firstText(
-                environment.getProperty(PREFIX + "jndi-name"),
-                environment.getProperty("spring.datasource.jndi-name"));
+        String jndiName = environment.getProperty(PREFIX + "jndi-name");
         if (jndiName != null) {
             return loadProperties(lookupDataSource(jndiName).getConnection(), query);
         }
 
-        String url = requiredProperty(environment, "spring.datasource.url");
-        String username = environment.getProperty("spring.datasource.username", "");
-        String password = environment.getProperty("spring.datasource.password", "");
-        String driverClassName = environment.getProperty("spring.datasource.driver-class-name");
+        // Embedded Tomcat has not created JNDI yet at this early boot phase.
+        // Use the exact same cxfdemo1 resource definition that will later be
+        // registered as java:comp/env/jdbc/cxfdemo1; do not define a second DataSource.
+        String configuredJndiName = requiredProperty(
+                environment, MAIN_JNDI_DATASOURCE_PREFIX + "jndi-name");
+        if (!"jdbc/cxfdemo1".equals(configuredJndiName)) {
+            throw new IllegalStateException(MAIN_JNDI_DATASOURCE_PREFIX
+                    + "jndi-name must be jdbc/cxfdemo1 because cxfdemo1 is the main database");
+        }
+        String url = requiredProperty(environment, MAIN_JNDI_DATASOURCE_PREFIX + "jdbc-url");
+        String username = environment.getProperty(MAIN_JNDI_DATASOURCE_PREFIX + "username", "");
+        String password = environment.getProperty(MAIN_JNDI_DATASOURCE_PREFIX + "password", "");
+        String driverClassName = environment.getProperty(
+                MAIN_JNDI_DATASOURCE_PREFIX + "driver-class-name");
         if (driverClassName != null && !driverClassName.isBlank()) {
             Class.forName(driverClassName);
         }
@@ -74,13 +84,6 @@ public final class DatabaseSystemPropertiesEnvironmentPostProcessor
             throw new IllegalStateException(name + " must be configured when DB properties are enabled");
         }
         return value;
-    }
-
-    private String firstText(String first, String second) {
-        if (first != null && !first.isBlank()) {
-            return first;
-        }
-        return second != null && !second.isBlank() ? second : null;
     }
 
     private DataSource lookupDataSource(String jndiName) throws NamingException {
