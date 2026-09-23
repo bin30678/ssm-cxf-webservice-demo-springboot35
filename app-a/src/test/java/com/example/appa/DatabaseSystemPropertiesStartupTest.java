@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.web.context.WebApplicationContext;
 
 class DatabaseSystemPropertiesStartupTest {
 
@@ -29,6 +30,10 @@ class DatabaseSystemPropertiesStartupTest {
             assertThat(context.getBean(ApiService.class)).isNotNull();
             assertThat(context.getBean(MailService.class)).isNotNull();
             assertThat(context.getBean(ExternalApiLogDao.class)).isNotNull();
+            var servletContext = ((WebApplicationContext) context).getServletContext();
+            assertThat(servletContext.getAttribute("hasTiffReader")).isInstanceOf(Boolean.class);
+            assertThat(servletContext.getAttribute("targetFont")).isEqualTo("\u6a19\u6977\u9ad4");
+            assertThat(servletContext.getAttribute("fontExists")).isInstanceOf(Boolean.class);
 
             assertThat(context.getEnvironment().getProperty("system.app.message"))
                     .isEqualTo("DB_STARTUP_PROPERTY_LOADED");

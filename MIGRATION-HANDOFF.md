@@ -323,3 +323,14 @@ java -version
 官方依據：
 - CXF Spring Boot JAX-RS discovery：<https://cwiki.apache.org/confluence/display/CXF20DOC/SpringBoot>
 - Spring 明確限定注入候選：<https://docs.spring.io/spring-framework/reference/core/beans/annotation-config/autowired-qualifiers.html>
+
+## 15. Servlet Listener 搬入 sharedservices
+
+- 原 SSM `web.xml` 的 `TiffImageReaderCheckListener`、`FontCheckListener` 已搬到 sharedservices。
+- 僅做 Spring Boot 3 必要 namespace 調整：`javax.servlet.*` → `jakarta.servlet.*`；檢查邏輯、ServletContext attribute 與 getter 保持原樣。
+- 新增 `SystemEnvironmentListenerAutoConfiguration`，只在 Servlet Web Application 啟用，使用 `ServletListenerRegistrationBean` 依原 web.xml 順序註冊 TIFF、Font listener。
+- 預設啟用；可用 `sharedservices.environment-check.enabled=false` 關閉。
+- app-a 以 `server.servlet.context-parameters.targetFont=標楷體` 保留舊 web.xml 的 context-param。
+- 舊 `ContextLoaderListener` 不搬；Spring Boot 自己管理 ApplicationContext 生命週期。
+- `DatabaseSystemPropertiesStartupTest` 驗證兩個 listener 寫入的 TIFF、字型 attribute，以及 `targetFont=標楷體`。
+- Spring Boot 官方依據：<https://docs.spring.io/spring-boot/reference/web/servlet.html#web.servlet.embedded-container.servlets-filters-listeners>
