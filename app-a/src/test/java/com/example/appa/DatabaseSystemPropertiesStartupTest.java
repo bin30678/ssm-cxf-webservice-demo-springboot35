@@ -3,6 +3,9 @@ package com.example.appa;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.example.cxfdemo.utils.GenericDao;
+import com.example.cxfdemo.dao.ExternalApiLogDao;
+import com.example.cxfdemo.service.ApiService;
+import com.example.cxfdemo.service.MailService;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.Statement;
@@ -22,6 +25,10 @@ class DatabaseSystemPropertiesStartupTest {
                 .web(WebApplicationType.SERVLET)
                 .run("--spring.main.banner-mode=off")) {
             AppAPropertyProbe probe = context.getBean(AppAPropertyProbe.class);
+
+            assertThat(context.getBean(ApiService.class)).isNotNull();
+            assertThat(context.getBean(MailService.class)).isNotNull();
+            assertThat(context.getBean(ExternalApiLogDao.class)).isNotNull();
 
             assertThat(context.getEnvironment().getProperty("system.app.message"))
                     .isEqualTo("DB_STARTUP_PROPERTY_LOADED");

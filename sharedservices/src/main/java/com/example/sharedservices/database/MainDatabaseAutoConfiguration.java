@@ -1,6 +1,9 @@
 package com.example.sharedservices.database;
 
 import com.example.cxfdemo.dao.AuditLogDao;
+import com.example.cxfdemo.dao.ExternalApiLogDao;
+import com.example.cxfdemo.service.ApiServiceImpl;
+import com.example.cxfdemo.service.MailServiceImpl;
 import javax.sql.DataSource;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.mybatis.spring.SqlSessionFactoryBean;
@@ -11,6 +14,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,6 +30,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 @ConditionalOnClass({SqlSessionFactory.class, SqlSessionTemplate.class, JdbcTemplate.class})
 @ConditionalOnProperty(prefix = "sharedservices.main-database", name = "enabled",
         havingValue = "true", matchIfMissing = true)
+@Import({ExternalApiLogDao.class, ApiServiceImpl.class, MailServiceImpl.class})
 public class MainDatabaseAutoConfiguration {
 
     @Bean(name = "dataSource1")
@@ -72,9 +77,8 @@ public class MainDatabaseAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(AuditLogDao.class)
-    AuditLogDao auditLogDao(@Qualifier("sqlSessionTemplate1") SqlSessionTemplate sqlSessionTemplate) {
-        AuditLogDao dao = new AuditLogDao();
-        dao.setSqlSessionTemplate(sqlSessionTemplate);
-        return dao;
+    AuditLogDao auditLogDao() {
+        return new AuditLogDao();
     }
+
 }
