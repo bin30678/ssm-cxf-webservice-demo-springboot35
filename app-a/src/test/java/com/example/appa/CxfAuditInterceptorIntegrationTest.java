@@ -36,7 +36,9 @@ class CxfAuditInterceptorIntegrationTest {
                 .web(WebApplicationType.SERVLET)
                 .run("--server.port=0", "--spring.main.banner-mode=off")) {
             int port = ((WebServerApplicationContext) context).getWebServer().getPort();
-            HttpClient client = HttpClient.newHttpClient();
+            HttpClient client = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NORMAL)
+                    .build();
 
             HttpResponse<String> restResponse = client.send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/rest/health"))
@@ -48,6 +50,8 @@ class CxfAuditInterceptorIntegrationTest {
             assertThat(restResponse.statusCode()).isEqualTo(200);
             assertThat(restResponse.body()).contains("\"status\":\"UP\"");
             assertAuditHeaders(restResponse, "rest-audit-guid");
+
+            assertOpenApiDocumentation(client, port);
 
             assertLegacyRestPath(client, port, "/rest/savxxx/probe", "savxxx-guid");
             assertLegacyRestPath(client, port, "/rest/ctbcxxxx/probe", "ctbcxxxx-guid");
@@ -124,6 +128,50 @@ class CxfAuditInterceptorIntegrationTest {
             verify(auditLogDao).insertResponseLog(eq("soap-audit-guid"), eq(200), contains("PONG:SOAP"));
             verify(auditLogDao).insertFaultLog(eq("soap-fault-guid"), anyString());
         }
+    }
+
+    private void assertOpenApiDocumentation(HttpClient client, int port) throws Exception {
+        HttpResponse<String> openApiResponse = client.send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + port + "/rest/openapi.json"))
+                        .header("Accept", "application/json")
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertThat(openApiResponse.statusCode()).isEqualTo(200);
+        assertThat(openApiResponse.body())
+                .contains("\"openapi\"")
+                .contains("\"title\" : \"App A REST API\"")
+                .contains("\"/health\"")
+                .doesNotContain("\"/api-docs/swagger-initializer.js\"");
+
+        HttpResponse<String> swaggerUiResponse = client.send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + port + "/rest/api-docs/"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertThat(swaggerUiResponse.statusCode()).isEqualTo(200);
+        assertThat(swaggerUiResponse.body()).containsIgnoringCase("swagger ui");
+        assertThat(swaggerUiResponse.uri().toString())
+                .contains("tryItOutEnabled=true")
+                .contains("url=/rest/openapi.json");
+
+        HttpResponse<String> initializerResponse = client.send(
+                HttpRequest.newBuilder(URI.create(
+                                "http://localhost:" + port
+                                        + "/rest/api-docs/swagger-initializer.js"))
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+
+        assertThat(initializerResponse.statusCode()).isEqualTo(200);
+        assertThat(initializerResponse.body())
+                .contains("url: \"/rest/openapi.json\"")
+                .contains("tryItOutEnabled: true")
+                .doesNotContain("petstore.swagger.io");
     }
 
     private void assertLegacyRestPath(HttpClient client, int port, String path, String requestId)
