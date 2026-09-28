@@ -351,3 +351,13 @@ java -version
 - Java 21 執行 `mvn -pl app-b -am test`：app-b 2 tests、0 failures、0 errors，reactor 四個模組 SUCCESS。
 - Java 21 完整執行 `mvn test`：七個 reactor 模組全部 SUCCESS；app-a 5 tests、app-b 2 tests，合計 7 tests、0 failures、0 errors。
 - 官方依據：Spring `@EnableScheduling` 等價取代 XML annotation-driven：<https://docs.spring.io/spring-framework/reference/integration/scheduling.html>；Boot 自動收集 Quartz JobDetail/Trigger：<https://docs.spring.io/spring-boot/3.5/reference/io/quartz.html>。
+
+## 17. CXF interceptor 共用化與舊 REST 路徑驗證
+
+- `CxfAuditInterceptorAutoConfiguration` 仍只在存在 CXF `Bus` 時啟用；app-b 這類非 Web／無 Bus 服務不會建立或掛載 interceptor。
+- 四個 interceptor 改成由 Spring 管理的 beans；三個 audit interceptor 直接依賴 sharedservices 的 `AuditLogDao` bean，缺少 DAO 時不會靜默略過 audit。使用端可提供同型別 bean 覆寫預設實作；共用註冊器只負責把它們掛到 Bus，關閉 Context 時再移除。
+- 各 Web 服務只要依賴 sharedservices 並正常建立 CXF Bus，就會自動套用 audit interceptor；不需要在每個服務或每個 Resource 重複列 interceptor。
+- 路徑仍維持舊架構的三段組合：CXFServlet `/rest/*` + JAX-RS server `address="/"` + Resource `@Path`。因此 `/rest/...`、`/rest/savxxx/...`、`/rest/ctbcxxxx/...`、`/rest/xxx/...` 共用同一個根 server 與同一組 Bus interceptor，不應為四種前綴建立四個 server。
+- test-only `LegacyPathProbeResource` 與 `CxfAuditInterceptorIntegrationTest` 已透過真實 HTTP 驗證一般 `/rest/health` 以及 `savxxx`、`ctbcxxxx`、`xxx` 三種前綴全部產生 audit request，既有 REST/SOAP normal/fault 驗證仍通過。
+- Java 21 在沙箱外完整執行 `mvn test`：七個 reactor 模組全部 SUCCESS；app-a 5 tests、app-b 2 tests，合計 7 tests、0 failures、0 errors。
+- 官方依據：CXF Bus interceptor 會套用到該 Bus 的所有 endpoints：<https://cxf.apache.org/docs/bus-configuration.html>、<https://cxf.apache.org/docs/interceptors.html>；JAX-RS `@Path` 負責相對資源路徑：<https://cxf.apache.org/docs/jax-rs-basics.html>。

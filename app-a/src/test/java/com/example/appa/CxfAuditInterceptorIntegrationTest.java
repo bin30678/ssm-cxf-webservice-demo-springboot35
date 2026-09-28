@@ -49,6 +49,10 @@ class CxfAuditInterceptorIntegrationTest {
             assertThat(restResponse.body()).contains("\"status\":\"UP\"");
             assertAuditHeaders(restResponse, "rest-audit-guid");
 
+            assertLegacyRestPath(client, port, "/rest/savxxx/probe", "savxxx-guid");
+            assertLegacyRestPath(client, port, "/rest/ctbcxxxx/probe", "ctbcxxxx-guid");
+            assertLegacyRestPath(client, port, "/rest/xxx/probe", "xxx-guid");
+
             HttpResponse<String> restFaultResponse = client.send(
                     HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/rest/health"))
                             .header("X-Request-Id", "rest-fault-guid")
@@ -104,6 +108,15 @@ class CxfAuditInterceptorIntegrationTest {
                     eq("rest-audit-guid"), any(), any(), anyString(), eq("/rest/health"), eq("GET"),
                     nullable(String.class));
             verify(auditLogDao).insertResponseLog(eq("rest-audit-guid"), eq(200), contains("\"status\":\"UP\""));
+            verify(auditLogDao).insertRequestLog(
+                    eq("savxxx-guid"), any(), any(), anyString(), eq("/rest/savxxx/probe"), eq("GET"),
+                    nullable(String.class));
+            verify(auditLogDao).insertRequestLog(
+                    eq("ctbcxxxx-guid"), any(), any(), anyString(), eq("/rest/ctbcxxxx/probe"), eq("GET"),
+                    nullable(String.class));
+            verify(auditLogDao).insertRequestLog(
+                    eq("xxx-guid"), any(), any(), anyString(), eq("/rest/xxx/probe"), eq("GET"),
+                    nullable(String.class));
             verify(auditLogDao).insertFaultLog(eq("rest-fault-guid"), anyString());
             verify(auditLogDao).insertRequestLog(
                     eq("soap-audit-guid"), any(), any(), anyString(), eq("/Webservice/soap/audit"), eq("POST"),
@@ -111,6 +124,18 @@ class CxfAuditInterceptorIntegrationTest {
             verify(auditLogDao).insertResponseLog(eq("soap-audit-guid"), eq(200), contains("PONG:SOAP"));
             verify(auditLogDao).insertFaultLog(eq("soap-fault-guid"), anyString());
         }
+    }
+
+    private void assertLegacyRestPath(HttpClient client, int port, String path, String requestId)
+            throws Exception {
+        HttpResponse<String> response = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+                        .header("X-Request-Id", requestId)
+                        .GET()
+                        .build(),
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertAuditHeaders(response, requestId);
     }
 
     private void assertAuditHeaders(HttpResponse<String> response, String expectedRequestId) {
